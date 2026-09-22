@@ -124,7 +124,7 @@ class TestGlobMatch:
 def test_send_email_starttls_success(config, monkeypatch):
     sent = []
     monkeypatch.setattr(smtplib, "SMTP", make_stub_smtp(sent))
-    send_email(config, "<html>hello</html>")
+    assert send_email(config, "<html>hello</html>")
     assert len(sent) == 1
     sender, recipients, body = sent[0]
     assert sender == "test@example.com"
@@ -150,7 +150,7 @@ def test_send_email_falls_back_to_ssl(config, monkeypatch):
 
     monkeypatch.setattr(smtplib, "SMTP", StubSMTP_TLS_Fails)
     monkeypatch.setattr(smtplib, "SMTP_SSL", StubSMTP_SSL)
-    send_email(config, "<html>ssl</html>")
+    assert send_email(config, "<html>ssl</html>")
     assert len(sent) == 1
 
 
@@ -182,8 +182,33 @@ def test_send_email_falls_back_to_plain(config, monkeypatch):
 
     monkeypatch.setattr(smtplib, "SMTP", StubSMTP_TLS_Fails)
     monkeypatch.setattr(smtplib, "SMTP_SSL", StubSMTP_SSL_Fails)
-    send_email(config, "<html>plain</html>")
+    assert send_email(config, "<html>plain</html>")
     assert len(sent) == 1
+
+
+def test_send_email_returns_false_when_auth_fails(config, monkeypatch):
+    sent = []
+
+    class StubSMTP_TLS_Fails:
+        def __init__(self, *a, **kw):
+            pass
+        def starttls(self):
+            raise OSError("TLS not supported")
+
+    class StubSMTP_SSL_Auth_Fails:
+        def __init__(self, *a, **kw):
+            pass
+        def login(self, u, p):
+            raise smtplib.SMTPServerDisconnected("Connection unexpectedly closed")
+        def sendmail(self, s, r, m):
+            sent.append((s, r, m))
+        def quit(self):
+            pass
+
+    monkeypatch.setattr(smtplib, "SMTP", StubSMTP_TLS_Fails)
+    monkeypatch.setattr(smtplib, "SMTP_SSL", StubSMTP_SSL_Auth_Fails)
+    assert not send_email(config, "<html>fail</html>")
+    assert len(sent) == 0
 
 
 # ---------------------------------------------------------------------------
