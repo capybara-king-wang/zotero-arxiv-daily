@@ -139,7 +139,7 @@ def glob_match(path:str, pattern:str) -> bool:
     re_pattern = glob.translate(pattern,recursive=True)
     return re.match(re_pattern, path) is not None
 
-def send_email(config:DictConfig, html:str):
+def send_email(config:DictConfig, html:str) -> bool:
     sender = config.email.sender
     receiver = config.email.receiver
     password = config.email.sender_password
@@ -164,8 +164,22 @@ def send_email(config:DictConfig, html:str):
             server = smtplib.SMTP_SSL(smtp_server, smtp_port)
         except Exception as e:
             logger.debug(f"Failed to use SSL. {e}\nTry to use plain text.")
-            server = smtplib.SMTP(smtp_server, smtp_port)
+            try:
+                server = smtplib.SMTP(smtp_server, smtp_port)
+            except Exception as e:
+                logger.warning(f"Failed to connect to SMTP server {smtp_server}:{smtp_port}: {e}")
+                return False
 
-    server.login(sender, password)
-    server.sendmail(sender, [receiver], msg.as_string())
+    try:
+        server.login(sender, password)
+        server.sendmail(sender, [receiver], msg.as_string())
+    except Exception as e:
+        logger.warning(f"Failed to send email from {sender} to {receiver}: {e}")
+        try:
+            server.quit()
+        except Exception:
+            pass
+        return False
+
     server.quit()
+    return True
